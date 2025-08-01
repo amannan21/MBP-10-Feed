@@ -31,19 +31,30 @@ One input line in ⇒ one snapshot line out.
 No buffering, no batching, no back‑fills—keeps correctness trivial and latency bounded.
 
 Technical guts & design decisions
-1. Data structures
-Requirement	Choice	Rationale
-O(1) look‑ups by order_id for cancels/modifies	unordered_map<OrderId, Order>	Hash table hits memory once, negligible overhead.
-Sorted access to best prices	std::map<Price, AggLevel> with std::greater (bids) / std::less (asks)	Balanced tree gives log‑time inserts and “best price” is just begin().
-Memory footprint	Obvious: one Order per open order, one AggLevel per price	For a liquid NASDAQ name you’re still < 100 MB.
+# Order Book Reconstruction Overview
 
-Why not a heap or vector of levels?
-Maintaining heap order after every price‐level size change is actually slower than updating a red‑black node in‑place. Extra pointer chasing rarely beats the map’s built‑in tuning.
+This implementation processes each input line independently and generates a single snapshot line immediately. It avoids buffering, batching, or backfills—this design keeps correctness straightforward and ensures consistent, low latency.
 
-2. Event handling
-cpp
-Copy
-Edit
+---
+
+## Design Choices & Rationale
+
+### 1. Data Structures
+
+| Requirement                             | Chosen Data Structure                              | Reasoning / Explanation                                               |
+|-----------------------------------------|----------------------------------------------------|------------------------------------------------------------------------|
+| **Order ID Lookup (cancels/modifies)**  | `unordered_map<OrderId, Order>`                    | Constant-time lookups; minimal memory overhead.                        |
+| **Sorted Best Price Access**            | `std::map<Price, AggLevel>`                        | Balanced tree with efficient log-time operations. Easy best-price access via `begin()`. |
+| **Memory Usage**                        | One entry per open order and price level           | Lightweight footprint, usually < 100 MB even for busy NASDAQ symbols.  |
+
+**Why not heaps or vectors?**  
+Maintaining heap order after frequent updates is slower due to reordering overhead. Balanced trees (`std::map`) are naturally optimized and faster in practice, especially given frequent updates at price levels.
+
+---
+
+### 2. Event Handling Logic
+
+```cpp
 switch (action) {
     case 'A': book.add(id, side, px, sz);      break;
     case 'C': book.cancel(id, sz);             break;
@@ -51,55 +62,42 @@ switch (action) {
     case 'R': book.clear();                    break;
     default: /* T, F, N */                     break;
 }
-Add – insert order, grow level.
 
-Cancel – shrink size, drop level if empty.
 
-Modify – implemented as cancel + add (keeps queue‑priority semantics easy).
+| Action | Behavior                                        |
+| ------ | ----------------------------------------------- |
+| `A`    | Insert a new order and update price level.      |
+| `C`    | Reduce order size, remove price level if empty. |
+| `M`    | Execute as cancel + add (preserves priority).   |
+| `R`    | Clear entire state (e.g., after halts).         |
+| Others | Ignored; not relevant to current snapshot.      |
 
-Clear – nuke entire state (trading halt resume, etc.).
-
-Trade/Fill/None – ignored because either (a) the match gets reported via a follow‑up cancel/fill or (b) it never touched the resting book in the first place.
-
-Edge‑case protections (not shown here but included in final repo):
-
-dangling cancels,
-
-out‑of‑order modify,
-
-side=='N' sanity checks.
-
-3. Snapshot generation
 Walk the first ten nodes in each map, dump price,size.
 Ten iterations is cache‑hot; no need for a pre‑cached “best‑10” array unless profiling proves otherwise.
 
+3. Snapshot Generation
+Snapshot generation involves simply iterating through the top 10 entries of each side (bids and asks) and outputting their prices and sizes.
+Due to caching, this approach is efficient enough not to require additional optimizations, such as maintaining a precomputed top-10 list, unless profiling specifically indicates otherwise.
+
 4. CSV output format
-Copy
-Edit
-ts_event,
-bid_px_00,bid_sz_00,…bid_px_09,bid_sz_09,
-ask_px_00,ask_sz_00,…ask_px_09,ask_sz_09
-Two‑decimal USD fixed‑point (5.51, not pennies).
 
-Empty slots are 0,0 to stay byte‑for‑byte compatible with the grader.
-
-5. Tiny zero‑copy CSV splitter
-Accepts a std::string_view for the full line.
-
-Scans once, pushes new string_views into a vector.
-
-No allocations, no copies; views die when the line buffer is overwritten.
-
-Assumes no quoted fields (valid for ITCH‑derived dumps).
-
-With compiler flags -O3 -march=native, the splitter is ~1.5 GB/s on my M2 laptop—well above disk‑read speed. That’s why we don’t drag in libcsv or <regex>.
+ts_event,bid_px_00,bid_sz_00,...,bid_px_09,bid_sz_09,ask_px_00,ask_sz_00,...,ask_px_09,ask_sz_09
 
 
-7. Compile & run
-bash
-Copy
-Edit
-make                # g++‑17, -O3, LTO optional
+5. Optimized CSV Parsing (Zero-Copy)
+
+Custom-built parser uses a single-pass approach with std::string_view.
+
+No allocations or string copies—highly efficient.
+
+Assumes input data without quoted fields (valid for ITCH-like market data feeds).
+
+Performance: Achieves roughly 1.5 GB/s parsing throughput on optimized compiler settings (-O3 -march=native), comfortably exceeding typical disk-read speeds.
+
+
+6. Compile & Run Instructions
+
+make                # Requires g++-17 with -O3 optimization, optional LTO
 ./reconstruction mbo.csv > mbp.csv
 
 
