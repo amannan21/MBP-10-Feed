@@ -16,7 +16,7 @@ flowchart TD
     D --> E["Emit MBP-10 snapshot - timestamp + 40 fields"]
 Technical Details & design decisions
 
-## Order Book Reconstruction Overview
+# Order Book Reconstruction Overview
 
 This implementation processes each input line independently and generates a single snapshot line immediately. It avoids buffering, batching, or backfills—this design keeps correctness straightforward and ensures consistent, low latency.
 
