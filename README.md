@@ -9,16 +9,14 @@ Exchanges don’t give you the full order book directly. Retail APIs usually jus
 
 ## High-Level Flow
 
-```mermaid
 flowchart TD
     A[Raw ITCH CSV] --> B[Tiny zero-copy parser]
-    B --> C[Order-by-ID hash<br/>+ bid/ask price maps]
-    C --> D[Update book state<br/>(A / M / C / R logic)]
-    D --> E[Emit MBP-10 snapshot<br/>(timestamp + 40 fields)]
-```
-
+    B --> C["Order-by-ID hash + bid/ask price maps"]
+    C --> D["Update book state - A M C R logic"]
+    D --> E["Emit MBP-10 snapshot - timestamp + 40 fields"]
 Technical Details & design decisions
-# Order Book Reconstruction Overview
+
+## Order Book Reconstruction Overview
 
 This implementation processes each input line independently and generates a single snapshot line immediately. It avoids buffering, batching, or backfills—this design keeps correctness straightforward and ensures consistent, low latency.
 
