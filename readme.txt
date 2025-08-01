@@ -1,25 +1,14 @@
 Rebuilding an MBP‑10 Feed from Raw MBO Events
-A straight‑talk deep dive into why you’d bother, what the code does, and the engineering trade‑offs behind every line.
 
 Why reconstruct your own order book at all?
-Exchanges don’t spoon‑feed you depth.
-Retail APIs might stream “top‑of‑book” or a throttled MBP feed, but professional desks want the entire depth picture in real‑time. Getting that means replaying the raw Market‑by‑Order (MBO) event stream.
+Exchanges don’t spoon‑feed you depth. Retail APIs might stream “top‑of‑book” or a throttled MBP feed, but professional desks want the entire depth picture in real‑time. Getting that means replaying the raw Market‑by‑Order (MBO) event stream.
 
-Latency is king.
-If your slippage model is even a millisecond stale you’re the one providing alpha to the faster guy. Building the book locally keeps the critical logic on‑box, close to your trading engine.
+Latency is key: If your slippage model is even a millisecond stale you’re the one providing alpha to the person who's faster. Building the book locally keeps the critical logic on‑box, close to your trading engine.
 
-Cost and flexibility.
-Full‑depth proprietary feeds are expensive and wrapped in usage restrictions. Raw event files (ITCH, OUCH, PITCH, Binary OU, whatever) are cheaper and more flexible to post‑process or back‑test.
 
-Determinism for research.
-You can always replay exactly the same day, tweak your algo, and know that any P&L change came from the algorithm—not from differences in what the exchange decided to show you.
-
-Bottom line: If you care about execution quality or microstructure research, you need the MBP‑10 (or deeper) view—and you often need to build it yourself.
 
 High‑level flow
-pgsql
-Copy
-Edit
+
                 ┌──────────────────────────┐
  raw ITCH CSV → │  tiny zero‑copy parser   │
                 └──────────┬───────────────┘
@@ -105,10 +94,6 @@ Assumes no quoted fields (valid for ITCH‑derived dumps).
 
 With compiler flags -O3 -march=native, the splitter is ~1.5 GB/s on my M2 laptop—well above disk‑read speed. That’s why we don’t drag in libcsv or <regex>.
 
-6. Price parsing
-Instead of stod, we run a bespoke parse_price() that walks the characters and constructs dollars and cents integers.
-Why? stod allocates and is ~10× slower.
-Converting "14.23" to 1423 in‑house keeps the loop vectorisable.
 
 7. Compile & run
 bash
@@ -116,13 +101,6 @@ Copy
 Edit
 make                # g++‑17, -O3, LTO optional
 ./reconstruction mbo.csv > mbp.csv
-On a 9‑million‑row day of MSFT the whole pipeline:
 
-parses
 
-updates the book
-
-prints 9 million snapshots
-
-in < 0.7 s on commodity hardware—~13 M msgs/s including disk I/O. CPU load is basically one core pegged.
 
