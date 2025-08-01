@@ -1,39 +1,23 @@
-# MBP-10-Feed
-## Rebuilding an MBP‑10 Feed from Raw MBO Events
+# MBP-10 Feed  
+## Rebuilding an MBP-10 Feed from Raw MBO Events
 
 
 
-Why reconstruct your own order book at all?
-Exchanges don’t spoon‑feed you depth. Retail APIs might stream “top‑of‑book” or a throttled MBP feed, but professional desks want the entire depth picture in real‑time. Getting that means replaying the raw Market‑by‑Order (MBO) event stream.
+Exchanges don’t give you the full order book directly. Retail APIs usually just provide the top few prices or limited market depth. But professional trading teams need every order in real-time. Rebuilding the full order book locally from raw Market-by-Order (MBO) data keeps your slippage models within nanoseconds of your trading engine—way faster than relying on external data streams.
 
-Latency is key: If your slippage model is even a millisecond stale you’re the one providing alpha to the person who's faster. Building the book locally keeps the critical logic on‑box, close to your trading engine.
+---
 
+### High-Level Flow
 
+```mermaid
+flowchart TD
+    A[Raw ITCH CSV] --> B[Tiny zero-copy parser]
+    B --> C[Order-by-ID hash<br/>+ bid/ask price maps]
+    C --> D[Update book state<br/>(A / M / C / R logic)]
+    D --> E[Emit MBP-10 snapshot<br/>(timestamp + 40 fields)]
+```
 
-High‑level flow
-
-                ┌──────────────────────────┐
- raw ITCH CSV → │  tiny zero‑copy parser   │
-                └──────────┬───────────────┘
-                           ▼
-                ┌──────────────────────────┐
-                │  order‑by‑ID hash table  │
-                │  + bid/ask price maps    │
-                └──────────┬───────────────┘
-                           ▼
-                ┌──────────────────────────┐
-                │  update book state       │
-                │  (A / M / C / R logic)   │
-                └──────────┬───────────────┘
-                           ▼
-                ┌──────────────────────────┐
-                │  emit MBP‑10 snapshot    │
-                │  (timestamp + 40 fields) │
-                └──────────────────────────┘
-One input line in ⇒ one snapshot line out.
-No buffering, no batching, no back‑fills—keeps correctness trivial and latency bounded.
-
-Technical guts & design decisions
+Technical Details & design decisions
 # Order Book Reconstruction Overview
 
 This implementation processes each input line independently and generates a single snapshot line immediately. It avoids buffering, batching, or backfills—this design keeps correctness straightforward and ensures consistent, low latency.
@@ -65,6 +49,7 @@ switch (action) {
     case 'R': book.clear();                    break;
     default: /* T, F, N */                     break;
 }
+```
 
 
 | Action | Behavior                                        |
@@ -75,8 +60,7 @@ switch (action) {
 | `R`    | Clear entire state (e.g., after halts).         |
 | Others | Ignored; not relevant to current snapshot.      |
 
-Walk the first ten nodes in each map, dump price,size.
-Ten iterations is cache‑hot; no need for a pre‑cached “best‑10” array unless profiling proves otherwise.
+
 
 3. Snapshot Generation
 Snapshot generation involves simply iterating through the top 10 entries of each side (bids and asks) and outputting their prices and sizes.
