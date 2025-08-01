@@ -7,7 +7,7 @@ Exchanges don’t give you the full order book directly. Retail APIs usually jus
 
 ---
 
-### High-Level Flow
+## High-Level Flow
 
 ```mermaid
 flowchart TD
@@ -61,32 +61,28 @@ switch (action) {
 | Others | Ignored; not relevant to current snapshot.      |
 
 
+## Snapshot Generation
 
-3. Snapshot Generation
-Snapshot generation involves simply iterating through the top 10 entries of each side (bids and asks) and outputting their prices and sizes.
-Due to caching, this approach is efficient enough not to require additional optimizations, such as maintaining a precomputed top-10 list, unless profiling specifically indicates otherwise.
+Snapshot generation involves simply iterating through the top 10 entries of each side (bids and asks) and outputting their prices and sizes. Due to caching, this approach is efficient enough not to require additional optimizations, such as maintaining a precomputed top-10 list, unless profiling specifically indicates otherwise.
 
-4. CSV output format
+## CSV Output Format
 
+```
 ts_event,bid_px_00,bid_sz_00,...,bid_px_09,bid_sz_09,ask_px_00,ask_sz_00,...,ask_px_09,ask_sz_09
+```
 
+## Optimized CSV Parsing (Zero-Copy)
 
-5. Optimized CSV Parsing (Zero-Copy)
+Custom-built parser uses a single-pass approach with `std::string_view`. No allocations or string copies—highly efficient. Assumes input data without quoted fields (valid for ITCH-like market data feeds).
 
-Custom-built parser uses a single-pass approach with std::string_view.
+**Performance:** Achieves roughly 1.5 GB/s parsing throughput on optimized compiler settings (`-O3 -march=native`), comfortably exceeding typical disk-read speeds.
 
-No allocations or string copies—highly efficient.
+## Compile & Run Instructions
 
-Assumes input data without quoted fields (valid for ITCH-like market data feeds).
-
-Performance: Achieves roughly 1.5 GB/s parsing throughput on optimized compiler settings (-O3 -march=native), comfortably exceeding typical disk-read speeds.
-
-
-6. Compile & Run Instructions
-
-make                # Requires g++-17 with -O3 optimization, optional LTO
+```bash
+make  # Requires g++-17 with -O3 optimization, optional LTO
 ./reconstruction mbo.csv > mbp.csv
-
+```
 
 
 
