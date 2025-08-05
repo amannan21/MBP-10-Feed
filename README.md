@@ -19,7 +19,7 @@ Technical Details & design decisions
 
 # Order Book Reconstruction Overview
 
-This implementation processes each input line independently and generates a single snapshot line immediately. It avoids buffering, batching, or backfills—this design keeps correctness straightforward and ensures consistent, low latency.
+This implementation processes each input line independently and generates a single snapshot line immediately. It avoids buffering, batching, or backfills. This design keeps correctness straightforward and ensures consistent, low latency.
 
 ---
 
