@@ -3,19 +3,10 @@
 
 
 
-Exchanges typically don't provide the complete order book directly. Most retail APIs only give you the top few prices or limited market depth. However, professional trading teams need access to every individual order in real time. Reconstructing the full order book locally using raw Market-by-Order (MBO) data ensures your slippage models remain just behind your trading engine, significantly faster than depending on external data streams.
+Exchanges typically don't provide the complete order book directly and most retail APIs only give you the top few prices or limited market depth. However, professional trading teams need access to every individual order in real time. Reconstructing the full order book locally using raw Market-by-Order (MBO) data allows slippage models to remain just behind your trading engine, significantly faster than depending on external data streams.
 
 
 ---
-
-## High-Level Flow
-
-flowchart TD
-    A[Raw ITCH CSV] --> B[Tiny zero-copy parser]
-    B --> C["Order-by-ID hash + bid/ask price maps"]
-    C --> D["Update book state - A M C R logic"]
-    D --> E["Emit MBP-10 snapshot - timestamp + 40 fields"]
-Technical Details & design decisions
 
 # Order Book Reconstruction Overview
 
